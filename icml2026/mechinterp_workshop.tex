@@ -45,9 +45,9 @@ Mechanistic interpretability seeks to understand how neural networks implement c
 
 This asymmetry matters for a basic reason: if different sequence architectures converge to similar internal geometries on the same task, then at least some mechanistic explanations may transfer across model families. If they do not, then architecture-specific tools and theories remain necessary even in small, controlled domains. Behavioral accuracy alone cannot resolve this issue. Two models may solve the same task with similar accuracy while relying on different intermediate representations, or may exhibit similar internal geometry while failing in the same way.
 
-We study this question in a deliberately small but controlled setting. Using a shared codebase, we train matched 2-layer Transformer, LSTM, and GRU classifiers on five synthetic tasks: modular addition, Dyck-1, Dyck-2, induction, and associative recall. We then compute layer-wise centered kernel alignment (CKA) heatmaps \cite{kornblith2019similarity} between architectures and compare them to within-architecture seed baselines.
+We study this question in a deliberately small but controlled setting. Using a shared codebase, we train matched 2-layer Transformer, LSTM, and GRU classifiers on five synthetic tasks: modular addition, Dyck-1, Dyck-2, induction, and associative recall. We then compute layer-wise centered kernel alignment (CKA) heatmaps \cite{kornblith2019similarity} between architectures and compare them to within-architecture seed baselines, together with layer-wise linear probes.
 
-Our main contribution is an empirical benchmark for cross-architecture representational comparison in mechanistic interpretability. The benchmark is small enough to inspect directly, but broad enough to expose qualitatively different regimes. We find three robust patterns. First, modular addition yields high accuracy and substantial cross-architecture alignment, suggesting convergent solutions are possible. Second, Dyck tasks, especially Dyck-2, show a stronger recurrent-to-recurrent alignment than Transformer-to-recurrent alignment, consistent with architecture-specific inductive biases for hierarchical state tracking. Third, induction and associative recall remain difficult for all three models in this setting, yet still show moderate similarity, indicating that representational similarity alone should not be interpreted as evidence of successful mechanistic convergence.
+Our main contribution is an empirical benchmark for cross-architecture representational comparison in mechanistic interpretability. The benchmark is small enough to inspect directly, but broad enough to expose qualitatively different regimes. We find three robust patterns. First, recurrent models (LSTM/GRU) strongly outperform the Transformer in this training setup on all five tasks. Second, Dyck tasks, especially Dyck-2, show lower Transformer-to-recurrent convergence indices than recurrent-to-recurrent indices, consistent with architecture-specific inductive biases for hierarchical state tracking. Third, induction and associative recall remain difficult overall, yet still show moderate cross-architecture similarity, indicating that representational similarity alone should not be interpreted as evidence of successful mechanistic convergence.
 
 \section{Related Work}
 
@@ -93,7 +93,7 @@ For each trained model, we collect mean-pooled activations from the embedding ou
 \begin{equation}
 \cka(X,Y)=\frac{\langle \widetilde{K}_X, \widetilde{K}_Y \rangle_F}{\|\widetilde{K}_X\|_F \|\widetilde{K}_Y\|_F},
 \end{equation}
-where $\widetilde{K}_X$ and $\widetilde{K}_Y$ are centered Gram matrices \cite{kornblith2019similarity}. For each task, we average pairwise heatmaps across seeds for cross-architecture comparisons and compute a within-architecture baseline by comparing the two seeds of the same architecture.
+where $\widetilde{K}_X$ and $\widetilde{K}_Y$ are centered Gram matrices \cite{kornblith2019similarity}. For each task, we average pairwise heatmaps across seeds for cross-architecture comparisons and compute within-architecture baselines from all seed pairs (28 pairs per architecture with eight seeds). We also report a Convergence Index (CI), defined as mean cross-architecture CKA divided by the corresponding mean within-architecture baseline.
 
 \section{Results}
 
@@ -115,9 +115,9 @@ Associative Recall & $0.237 \pm 0.028$ & $0.352 \pm 0.016$ & $0.328 \pm 0.033$ \
 \end{tabular}
 \end{table*}
 
-\subsection{Accuracy Separates Easy, Structured, and Hard Regimes}
+\subsection{Accuracy Reveals Strong Architecture Effects}
 
-\Cref{tab:accuracy} shows clear architecture sensitivity under this MLX run: recurrent models (LSTM/GRU) remain strong on modular addition and Dyck variants, while the Transformer is substantially weaker across all five tasks, including near-chance performance on modular addition and induction. Induction and associative recall are difficult overall, but GRU and LSTM still retain a meaningful margin above chance.
+\Cref{tab:accuracy} shows strong architecture sensitivity under this MLX run: recurrent models (LSTM/GRU) remain strong on modular addition and Dyck variants, while the Transformer is substantially weaker across all five tasks, including near-chance performance on modular addition ($0.100 \pm 0.014$) and induction ($0.252 \pm 0.007$). Induction and associative recall are difficult overall, but GRU and LSTM still retain a meaningful margin above chance.
 
 This accuracy landscape matters because it changes how representation similarity should be interpreted. On solved tasks, similarity may reflect convergent algorithms. On unsolved tasks, similarity may instead reflect convergent failure modes or shallow heuristics.
 
@@ -128,15 +128,15 @@ This accuracy landscape matters because it changes how representation similarity
     \label{fig:cross}
 \end{figure*}
 
-\subsection{Cross-Architecture Similarity Is Not Sufficient for Competence}
+\subsection{Similarity Is Not Sufficient for Competence}
 
-\Cref{fig:cross} shows moderate Transformer--recurrent alignment on several tasks, but this does not imply matched behavioral competence. In modular addition, for example, cross-architecture CKA is non-trivial while Transformer accuracy is near chance and recurrent accuracies are near perfect. This dissociation emphasizes that geometric similarity should be interpreted as a descriptive signal rather than direct evidence of algorithmic convergence.
+\Cref{fig:cross} shows moderate Transformer--recurrent alignment on several tasks, but this does not imply matched behavioral competence. In modular addition, for example, mean cross-architecture CKA remains non-trivial (Transformer$\leftrightarrow$LSTM: 0.424; Transformer$\leftrightarrow$GRU: 0.469) while Transformer accuracy is near chance and recurrent accuracies are near perfect. This dissociation emphasizes that geometric similarity should be interpreted as a descriptive signal rather than direct evidence of algorithmic convergence.
 
 This result is consistent with prior cautions that representation similarity can be confounded by shared dataset geometry and superficial feature organization \cite{cui2022deconfounded}. In this setting, CKA is still useful, but only when triangulated with accuracy and probe-readout quality.
 
-\subsection{Dyck Tasks Expose Architecture-Specific Internal Structure}
+\subsection{Dyck Tasks Show Reduced Cross-Family Convergence}
 
-The Dyck tasks reveal a clear recurrent-family pattern. On Dyck-1 and especially Dyck-2, LSTM vs GRU similarity is consistently higher than Transformer vs recurrent similarity, particularly in later layers (\cref{fig:cross}). This matches the accuracy pattern: recurrent models perform best, while the Transformer lags.
+The Dyck tasks reveal a clear recurrent-family pattern. On Dyck-1 and especially Dyck-2, Transformer-to-recurrent CI is lower than recurrent-to-recurrent CI (Dyck-2: 0.550 and 0.680 vs 0.901; \cref{tab:ci}), indicating weaker cross-family convergence. This matches the accuracy pattern: recurrent models perform best, while the Transformer lags.
 
 We interpret this as evidence that hierarchical bracket tracking induces more recurrent-specific solution geometry than modular addition does. In other words, matched external performance is not sufficient to force a shared internal topology, and when performance diverges, the geometry diverges even more strongly. This observation is broadly consistent with the idea that recurrent state updates are a natural fit for stack-like or counter-like structure, even when all models are trained on the same finite synthetic distribution \cite{suzgun2019dyck,wen2024rnns}.
 
@@ -144,7 +144,7 @@ We interpret this as evidence that hierarchical bracket tracking induces more re
 
 Induction and associative recall produce the lowest accuracies, yet their heatmaps are not uniformly low (\cref{fig:cross}). In particular, LSTM and GRU still align fairly strongly with one another, and Transformer-to-recurrent similarity remains moderate in several cells. This is an important cautionary result. Similarity does not imply success.
 
-One plausible interpretation is that all three architectures learn partially overlapping shallow heuristics on these tasks, without discovering the task-general mechanism required for high accuracy. This matches the broader lesson from \citet{cui2022deconfounded}: geometric similarity measures are informative but not self-interpreting. In our setting, they become much more useful when paired with baselines and performance.
+One plausible interpretation is that all three architectures learn partially overlapping shallow heuristics on these tasks, without discovering the task-general mechanism required for high accuracy. This matches the broader lesson from \citet{cui2022deconfounded}: geometric similarity measures are informative but not self-interpreting. In our setting, they become more useful when paired with baselines, probing, and performance.
 
 \begin{figure}[t]
     \centering
@@ -184,11 +184,15 @@ Associative Recall & 0.572 & 0.626 & 0.955 \\
 
 This comparison suggests a practical rule for future cross-architecture interpretability work: cross-family similarity should be evaluated relative to seed baselines, not treated as meaningful on an absolute scale.
 
+\subsection{Probing Supports Functional Differences}
+
+\Cref{fig:probe} provides a complementary functional readout. On structured tasks, recurrent models typically show higher probe accuracy at hidden layers than the Transformer, matching their higher task accuracy. On harder retrieval tasks, all architectures show modest probe gains over embeddings, but GRU/LSTM remain better than Transformer. This alignment between probe quality and end-task accuracy supports the interpretation that CKA alone is insufficient and should be triangulated with information accessibility.
+
 \section{Discussion}
 
-The benchmark points to a simple but useful framing: representational convergence across sequence architectures is task contingent.
+The benchmark points to a simple but useful framing: representational convergence across sequence architectures is task contingent and regime dependent.
 
-When the task admits a compact, easily discovered algorithm, as in modular addition, attention and recurrence can produce partially aligned internal geometry. When the task favors persistent state tracking, as in Dyck-2, recurrent models align more strongly with one another than with Transformers. When all models perform poorly, as in our induction and associative-recall setting, similarity can still be present, but it is more likely to reflect shared weakness than shared mechanistic competence.
+When recurrent models succeed but the Transformer underperforms, cross-architecture similarity can still appear, but it does not imply convergent mechanisms. When the task favors persistent state tracking, as in Dyck-2, recurrent models align more strongly with one another than with Transformers. When all models perform poorly, as in associative recall, similarity can still be present, but it is more likely to reflect shared weakness than shared mechanistic competence.
 
 These findings have two implications for mechanistic interpretability. First, the portability of explanations across architectures is likely to be limited and task dependent. Second, geometry-level analyses such as CKA are most valuable when used as a triage tool: they can identify where closer mechanistic study is likely to transfer and where it is likely to fail.
 
@@ -200,7 +204,7 @@ Several extensions are straightforward. First, the same pipeline can incorporate
 
 \section{Conclusion}
 
-We presented a compact benchmark for comparing Transformer, LSTM, and GRU representations across five synthetic mechanistic-interpretability tasks using cross-architecture and within-architecture CKA heatmaps. The main result is that convergence is selective rather than universal: modular addition yields clear cross-architecture alignment, Dyck tasks favor recurrent-specific geometry, and low-performing retrieval tasks show that moderate similarity can coexist with weak task competence. We hope this benchmark is useful both as a reproducible artifact and as a reminder that mechanistic explanations should be tested not only within architectures, but across them.
+We presented a compact benchmark for comparing Transformer, LSTM, and GRU representations across five synthetic mechanistic-interpretability tasks using cross-architecture and within-architecture CKA heatmaps, linear probes, and convergence indices. The main result is that convergence is selective rather than universal: Dyck tasks show reduced cross-family convergence, retrieval tasks show that moderate similarity can coexist with weak competence, and recurrent models dominate this specific MLX training regime. We hope this benchmark is useful both as a reproducible artifact and as a reminder that mechanistic explanations should be tested not only within architectures, but across them.
 
 \section*{Impact Statement}
 
@@ -218,12 +222,12 @@ All experiments were run with a single shared training pipeline. The Transformer
 
 \section{Artifact Availability}
 
-The paper uses three figures generated from the experiment outputs: a cross-architecture CKA summary, a within-architecture baseline summary, and an accuracy bar chart. The codebase also exports per-task heatmaps and a CSV metrics table, which can support future extensions or appendix material.
+The paper uses four figures generated from the experiment outputs: a cross-architecture CKA summary, a within-architecture baseline summary, an accuracy bar chart, and a probe summary. The codebase also exports per-task heatmaps, a metrics table, a probe table, and a convergence-index table.
 
 \begin{figure}[h]
     \centering
     \includegraphics[width=0.9\textwidth]{figure_accuracy_summary.png}
-    \caption{Accuracy summary reproduced in the appendix for convenience. The ranking across tasks is stable across the two seeds, with LSTM best on Dyck-2 and all models weak on induction and associative recall.}
+    \caption{Accuracy summary reproduced in the appendix for convenience. Across eight seeds in this run, recurrent models outperform the Transformer on all tasks, with strongest recurrent gains on modular addition and Dyck variants.}
     \label{fig:accuracyappendix}
 \end{figure}
 
