@@ -1,0 +1,430 @@
+{
+  "metrics_table_path": "metrics_table.csv",
+  "summary_by_task": {
+    "modular_addition": {
+      "dataset_seed": 42,
+      "model_seeds": [
+        42,
+        43
+      ],
+      "per_seed": {
+        "42": {
+          "transformer_val_accuracy": 1.0,
+          "lstm_val_accuracy": 1.0,
+          "gru_val_accuracy": 1.0
+        },
+        "43": {
+          "transformer_val_accuracy": 1.0,
+          "lstm_val_accuracy": 1.0,
+          "gru_val_accuracy": 1.0
+        }
+      },
+      "architectures": [
+        "transformer",
+        "lstm",
+        "gru"
+      ],
+      "cross_architecture": {
+        "transformer_vs_lstm": {
+          "transformer_val_accuracy": {
+            "mean": 1.0,
+            "std": 0.0
+          },
+          "lstm_val_accuracy": {
+            "mean": 1.0,
+            "std": 0.0
+          },
+          "heatmap_path": "modular_addition_transformer_vs_lstm_cross_seed_mean_cka.png"
+        },
+        "transformer_vs_gru": {
+          "transformer_val_accuracy": {
+            "mean": 1.0,
+            "std": 0.0
+          },
+          "gru_val_accuracy": {
+            "mean": 1.0,
+            "std": 0.0
+          },
+          "heatmap_path": "modular_addition_transformer_vs_gru_cross_seed_mean_cka.png"
+        },
+        "lstm_vs_gru": {
+          "lstm_val_accuracy": {
+            "mean": 1.0,
+            "std": 0.0
+          },
+          "gru_val_accuracy": {
+            "mean": 1.0,
+            "std": 0.0
+          },
+          "heatmap_path": "modular_addition_lstm_vs_gru_cross_seed_mean_cka.png"
+        }
+      },
+      "within_architecture": {
+        "transformer": {
+          "num_seed_pairs": 1,
+          "heatmap_path": "modular_addition_transformer_within_seed_baseline_cka.png",
+          "val_accuracy": {
+            "mean": 1.0,
+            "std": 0.0
+          }
+        },
+        "lstm": {
+          "num_seed_pairs": 1,
+          "heatmap_path": "modular_addition_lstm_within_seed_baseline_cka.png",
+          "val_accuracy": {
+            "mean": 1.0,
+            "std": 0.0
+          }
+        },
+        "gru": {
+          "num_seed_pairs": 1,
+          "heatmap_path": "modular_addition_gru_within_seed_baseline_cka.png",
+          "val_accuracy": {
+            "mean": 1.0,
+            "std": 0.0
+          }
+        }
+      }
+    },
+    "dyck_1": {
+      "dataset_seed": 42,
+      "model_seeds": [
+        42,
+        43
+      ],
+      "per_seed": {
+        "42": {
+          "transformer_val_accuracy": 0.9707,
+          "lstm_val_accuracy": 1.0,
+          "gru_val_accuracy": 1.0
+        },
+        "43": {
+          "transformer_val_accuracy": 0.9707,
+          "lstm_val_accuracy": 1.0,
+          "gru_val_accuracy": 1.0
+        }
+      },
+      "architectures": [
+        "transformer",
+        "lstm",
+        "gru"
+      ],
+      "cross_architecture": {
+        "transformer_vs_lstm": {
+          "transformer_val_accuracy": {
+            "mean": 0.9707,
+            "std": 0.0
+          },
+          "lstm_val_accuracy": {
+            "mean": 1.0,
+            "std": 0.0
+          },
+          "heatmap_path": "dyck_1_transformer_vs_lstm_cross_seed_mean_cka.png"
+        },
+        "transformer_vs_gru": {
+          "transformer_val_accuracy": {
+            "mean": 0.9707,
+            "std": 0.0
+          },
+          "gru_val_accuracy": {
+            "mean": 1.0,
+            "std": 0.0
+          },
+          "heatmap_path": "dyck_1_transformer_vs_gru_cross_seed_mean_cka.png"
+        },
+        "lstm_vs_gru": {
+          "lstm_val_accuracy": {
+            "mean": 1.0,
+            "std": 0.0
+          },
+          "gru_val_accuracy": {
+            "mean": 1.0,
+            "std": 0.0
+          },
+          "heatmap_path": "dyck_1_lstm_vs_gru_cross_seed_mean_cka.png"
+        }
+      },
+      "within_architecture": {
+        "transformer": {
+          "num_seed_pairs": 1,
+          "heatmap_path": "dyck_1_transformer_within_seed_baseline_cka.png",
+          "val_accuracy": {
+            "mean": 0.9707,
+            "std": 0.0
+          }
+        },
+        "lstm": {
+          "num_seed_pairs": 1,
+          "heatmap_path": "dyck_1_lstm_within_seed_baseline_cka.png",
+          "val_accuracy": {
+            "mean": 1.0,
+            "std": 0.0
+          }
+        },
+        "gru": {
+          "num_seed_pairs": 1,
+          "heatmap_path": "dyck_1_gru_within_seed_baseline_cka.png",
+          "val_accuracy": {
+            "mean": 1.0,
+            "std": 0.0
+          }
+        }
+      }
+    },
+    "dyck_2": {
+      "dataset_seed": 42,
+      "model_seeds": [
+        42,
+        43
+      ],
+      "per_seed": {
+        "42": {
+          "transformer_val_accuracy": 0.9512,
+          "lstm_val_accuracy": 1.0,
+          "gru_val_accuracy": 0.9434
+        },
+        "43": {
+          "transformer_val_accuracy": 0.959,
+          "lstm_val_accuracy": 1.0,
+          "gru_val_accuracy": 0.9688
+        }
+      },
+      "architectures": [
+        "transformer",
+        "lstm",
+        "gru"
+      ],
+      "cross_architecture": {
+        "transformer_vs_lstm": {
+          "transformer_val_accuracy": {
+            "mean": 0.9551,
+            "std": 0.0039
+          },
+          "lstm_val_accuracy": {
+            "mean": 1.0,
+            "std": 0.0
+          },
+          "heatmap_path": "dyck_2_transformer_vs_lstm_cross_seed_mean_cka.png"
+        },
+        "transformer_vs_gru": {
+          "transformer_val_accuracy": {
+            "mean": 0.9551,
+            "std": 0.0039
+          },
+          "gru_val_accuracy": {
+            "mean": 0.9561,
+            "std": 0.0127
+          },
+          "heatmap_path": "dyck_2_transformer_vs_gru_cross_seed_mean_cka.png"
+        },
+        "lstm_vs_gru": {
+          "lstm_val_accuracy": {
+            "mean": 1.0,
+            "std": 0.0
+          },
+          "gru_val_accuracy": {
+            "mean": 0.9561,
+            "std": 0.0127
+          },
+          "heatmap_path": "dyck_2_lstm_vs_gru_cross_seed_mean_cka.png"
+        }
+      },
+      "within_architecture": {
+        "transformer": {
+          "num_seed_pairs": 1,
+          "heatmap_path": "dyck_2_transformer_within_seed_baseline_cka.png",
+          "val_accuracy": {
+            "mean": 0.9551,
+            "std": 0.0039
+          }
+        },
+        "lstm": {
+          "num_seed_pairs": 1,
+          "heatmap_path": "dyck_2_lstm_within_seed_baseline_cka.png",
+          "val_accuracy": {
+            "mean": 1.0,
+            "std": 0.0
+          }
+        },
+        "gru": {
+          "num_seed_pairs": 1,
+          "heatmap_path": "dyck_2_gru_within_seed_baseline_cka.png",
+          "val_accuracy": {
+            "mean": 0.9561,
+            "std": 0.0127
+          }
+        }
+      }
+    },
+    "induction": {
+      "dataset_seed": 42,
+      "model_seeds": [
+        42,
+        43
+      ],
+      "per_seed": {
+        "42": {
+          "transformer_val_accuracy": 0.5039,
+          "lstm_val_accuracy": 0.5195,
+          "gru_val_accuracy": 0.5312
+        },
+        "43": {
+          "transformer_val_accuracy": 0.5273,
+          "lstm_val_accuracy": 0.541,
+          "gru_val_accuracy": 0.543
+        }
+      },
+      "architectures": [
+        "transformer",
+        "lstm",
+        "gru"
+      ],
+      "cross_architecture": {
+        "transformer_vs_lstm": {
+          "transformer_val_accuracy": {
+            "mean": 0.5156,
+            "std": 0.0117
+          },
+          "lstm_val_accuracy": {
+            "mean": 0.5303,
+            "std": 0.0107
+          },
+          "heatmap_path": "induction_transformer_vs_lstm_cross_seed_mean_cka.png"
+        },
+        "transformer_vs_gru": {
+          "transformer_val_accuracy": {
+            "mean": 0.5156,
+            "std": 0.0117
+          },
+          "gru_val_accuracy": {
+            "mean": 0.5371,
+            "std": 0.0059
+          },
+          "heatmap_path": "induction_transformer_vs_gru_cross_seed_mean_cka.png"
+        },
+        "lstm_vs_gru": {
+          "lstm_val_accuracy": {
+            "mean": 0.5303,
+            "std": 0.0107
+          },
+          "gru_val_accuracy": {
+            "mean": 0.5371,
+            "std": 0.0059
+          },
+          "heatmap_path": "induction_lstm_vs_gru_cross_seed_mean_cka.png"
+        }
+      },
+      "within_architecture": {
+        "transformer": {
+          "num_seed_pairs": 1,
+          "heatmap_path": "induction_transformer_within_seed_baseline_cka.png",
+          "val_accuracy": {
+            "mean": 0.5156,
+            "std": 0.0117
+          }
+        },
+        "lstm": {
+          "num_seed_pairs": 1,
+          "heatmap_path": "induction_lstm_within_seed_baseline_cka.png",
+          "val_accuracy": {
+            "mean": 0.5303,
+            "std": 0.0107
+          }
+        },
+        "gru": {
+          "num_seed_pairs": 1,
+          "heatmap_path": "induction_gru_within_seed_baseline_cka.png",
+          "val_accuracy": {
+            "mean": 0.5371,
+            "std": 0.0059
+          }
+        }
+      }
+    },
+    "associative_recall": {
+      "dataset_seed": 42,
+      "model_seeds": [
+        42,
+        43
+      ],
+      "per_seed": {
+        "42": {
+          "transformer_val_accuracy": 0.3145,
+          "lstm_val_accuracy": 0.3613,
+          "gru_val_accuracy": 0.3711
+        },
+        "43": {
+          "transformer_val_accuracy": 0.3027,
+          "lstm_val_accuracy": 0.3457,
+          "gru_val_accuracy": 0.3418
+        }
+      },
+      "architectures": [
+        "transformer",
+        "lstm",
+        "gru"
+      ],
+      "cross_architecture": {
+        "transformer_vs_lstm": {
+          "transformer_val_accuracy": {
+            "mean": 0.3086,
+            "std": 0.0059
+          },
+          "lstm_val_accuracy": {
+            "mean": 0.3535,
+            "std": 0.0078
+          },
+          "heatmap_path": "associative_recall_transformer_vs_lstm_cross_seed_mean_cka.png"
+        },
+        "transformer_vs_gru": {
+          "transformer_val_accuracy": {
+            "mean": 0.3086,
+            "std": 0.0059
+          },
+          "gru_val_accuracy": {
+            "mean": 0.3564,
+            "std": 0.0146
+          },
+          "heatmap_path": "associative_recall_transformer_vs_gru_cross_seed_mean_cka.png"
+        },
+        "lstm_vs_gru": {
+          "lstm_val_accuracy": {
+            "mean": 0.3535,
+            "std": 0.0078
+          },
+          "gru_val_accuracy": {
+            "mean": 0.3564,
+            "std": 0.0146
+          },
+          "heatmap_path": "associative_recall_lstm_vs_gru_cross_seed_mean_cka.png"
+        }
+      },
+      "within_architecture": {
+        "transformer": {
+          "num_seed_pairs": 1,
+          "heatmap_path": "associative_recall_transformer_within_seed_baseline_cka.png",
+          "val_accuracy": {
+            "mean": 0.3086,
+            "std": 0.0059
+          }
+        },
+        "lstm": {
+          "num_seed_pairs": 1,
+          "heatmap_path": "associative_recall_lstm_within_seed_baseline_cka.png",
+          "val_accuracy": {
+            "mean": 0.3535,
+            "std": 0.0078
+          }
+        },
+        "gru": {
+          "num_seed_pairs": 1,
+          "heatmap_path": "associative_recall_gru_within_seed_baseline_cka.png",
+          "val_accuracy": {
+            "mean": 0.3564,
+            "std": 0.0146
+          }
+        }
+      }
+    }
+  }
+}
