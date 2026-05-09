@@ -24,6 +24,13 @@ TASK_LABELS = {
     "induction": "Induction",
     "associative_recall": "Associative Recall",
 }
+TASK_CHANCE = {
+    "modular_addition": 0.10,
+    "dyck_1": 0.50,
+    "dyck_2": 0.50,
+    "induction": 0.25,
+    "associative_recall": 0.25,
+}
 ARCH_ORDER = ["transformer", "lstm", "gru"]
 ARCH_LABELS = {
     "transformer": "Transformer",
@@ -142,13 +149,13 @@ def build_cross_architecture_figure(
             ax.imshow(image)
             ax.set_xticks([])
             ax.set_yticks([])
-            title = f"{ARCH_LABELS[arch_a]} vs {ARCH_LABELS[arch_b]}"
+            title = f"{TASK_LABELS.get(task_name, task_name)}: {ARCH_LABELS[arch_a]} vs {ARCH_LABELS[arch_b]}"
             if row == 0:
-                ax.set_title(title, pad=8)
+                ax.set_title(title, pad=12, fontsize=10)
             accuracy_text = (
-                f"{ARCH_LABELS[arch_a]} {pair_summary[f'{arch_a}_val_accuracy']['mean']:.3f} +- "
+                f"{ARCH_LABELS[arch_a]} {pair_summary[f'{arch_a}_val_accuracy']['mean']:.3f} \u00b1 "
                 f"{pair_summary[f'{arch_a}_val_accuracy']['std']:.3f}\n"
-                f"{ARCH_LABELS[arch_b]} {pair_summary[f'{arch_b}_val_accuracy']['mean']:.3f} +- "
+                f"{ARCH_LABELS[arch_b]} {pair_summary[f'{arch_b}_val_accuracy']['mean']:.3f} \u00b1 "
                 f"{pair_summary[f'{arch_b}_val_accuracy']['std']:.3f}"
             )
             ax.text(
@@ -216,7 +223,7 @@ def build_within_architecture_figure(
             ax.text(
                 0.99,
                 0.02,
-                f"Acc {within_summary['val_accuracy']['mean']:.3f} +- "
+                f"Acc {within_summary['val_accuracy']['mean']:.3f} \u00b1 "
                 f"{within_summary['val_accuracy']['std']:.3f}\n"
                 f"Pairs {within_summary['num_seed_pairs']}",
                 transform=ax.transAxes,
@@ -290,7 +297,30 @@ def build_accuracy_figure(
                     alpha=0.7,
                 )
     ax.set_xticks(x)
-    ax.set_xticklabels([TASK_LABELS.get(task, task) for task in tasks], rotation=18, ha="right")
+    ax.set_xticklabels([TASK_LABELS.get(task, task) for task in tasks], rotation=0, ha="center")
+    for idx, task_name in enumerate(tasks):
+        chance = TASK_CHANCE.get(task_name)
+        if chance is None:
+            continue
+        ax.hlines(
+            y=chance,
+            xmin=idx - 0.42,
+            xmax=idx + 0.42,
+            colors="#666666",
+            linestyles="--",
+            linewidth=1.0,
+            alpha=0.75,
+            zorder=2,
+        )
+        ax.text(
+            idx,
+            chance + 0.015,
+            f"chance {chance:.2f}",
+            ha="center",
+            va="bottom",
+            fontsize=8,
+            color="#555555",
+        )
     ax.set_ylim(0.0, 1.05)
     ax.set_ylabel("Validation Accuracy")
     ax.set_title("Validation Accuracy Across Tasks and Architectures")
@@ -367,7 +397,7 @@ def build_probe_figure(
         ax.text(
             0.98,
             0.03,
-            f"Target: {task_summary['probe_target_name']}\nChance: {chance:.2f}",
+            f"Target: {task_summary['probe_target_name'].replace('_', ' ')}\nChance: {chance:.2f}",
             transform=ax.transAxes,
             ha="right",
             va="bottom",
@@ -381,8 +411,15 @@ def build_probe_figure(
         )
         _add_panel_badge(ax, panel_index)
     handles, labels = axes_array.flat[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="upper center", ncol=3, frameon=False)
-    fig.suptitle("Layer-wise Linear Probe Accuracy Across Tasks and Architectures", y=1.02)
+    fig.legend(
+        handles,
+        labels,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 1.02),
+        ncol=3,
+        frameon=False,
+    )
+    fig.suptitle("Layer-wise Linear Probe Accuracy Across Tasks and Architectures", y=1.08)
     return _save_figure(fig, output_dir / "figure_probe_summary")
 
 

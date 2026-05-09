@@ -141,13 +141,23 @@ class MLXTransformerClassifier(nn.Module):
         self.classifier = nn.Linear(config.d_model, num_classes)
 
     def __call__(
-        self, tokens: mx.array, return_activations: bool = False
+        self,
+        tokens: mx.array,
+        return_activations: bool = False,
+        replacement_activations: dict[str, mx.array] | None = None,
     ) -> MLXForwardResult | mx.array:
         hidden = self.position(self.embedding(tokens))
         activations: dict[str, mx.array] = {"embedding": hidden}
+        if replacement_activations and "embedding" in replacement_activations:
+            hidden = replacement_activations["embedding"]
+
         for idx, layer in enumerate(self.layers):
             hidden = layer(hidden)
-            activations[f"layer_{idx + 1}"] = hidden
+            layer_name = f"layer_{idx + 1}"
+            activations[layer_name] = hidden
+            if replacement_activations and layer_name in replacement_activations:
+                hidden = replacement_activations[layer_name]
+
         pooled = self.norm(mx.mean(hidden, axis=1))
         logits = self.classifier(pooled)
         if return_activations:
@@ -202,13 +212,23 @@ class MLXLSTMClassifier(nn.Module):
         self.classifier = nn.Linear(config.d_model, num_classes)
 
     def __call__(
-        self, tokens: mx.array, return_activations: bool = False
+        self,
+        tokens: mx.array,
+        return_activations: bool = False,
+        replacement_activations: dict[str, mx.array] | None = None,
     ) -> MLXForwardResult | mx.array:
         hidden = self.embedding(tokens)
         activations: dict[str, mx.array] = {"embedding": hidden}
+        if replacement_activations and "embedding" in replacement_activations:
+            hidden = replacement_activations["embedding"]
+
         for idx, cell in enumerate(self.layers):
             hidden = _run_lstm_layer(hidden, cell)
-            activations[f"layer_{idx + 1}"] = hidden
+            layer_name = f"layer_{idx + 1}"
+            activations[layer_name] = hidden
+            if replacement_activations and layer_name in replacement_activations:
+                hidden = replacement_activations[layer_name]
+
         pooled = self.norm(mx.mean(hidden, axis=1))
         logits = self.classifier(pooled)
         if return_activations:
@@ -227,13 +247,23 @@ class MLXGRUClassifier(nn.Module):
         self.classifier = nn.Linear(config.d_model, num_classes)
 
     def __call__(
-        self, tokens: mx.array, return_activations: bool = False
+        self,
+        tokens: mx.array,
+        return_activations: bool = False,
+        replacement_activations: dict[str, mx.array] | None = None,
     ) -> MLXForwardResult | mx.array:
         hidden = self.embedding(tokens)
         activations: dict[str, mx.array] = {"embedding": hidden}
+        if replacement_activations and "embedding" in replacement_activations:
+            hidden = replacement_activations["embedding"]
+
         for idx, cell in enumerate(self.layers):
             hidden = _run_gru_layer(hidden, cell)
-            activations[f"layer_{idx + 1}"] = hidden
+            layer_name = f"layer_{idx + 1}"
+            activations[layer_name] = hidden
+            if replacement_activations and layer_name in replacement_activations:
+                hidden = replacement_activations[layer_name]
+
         pooled = self.norm(mx.mean(hidden, axis=1))
         logits = self.classifier(pooled)
         if return_activations:
@@ -330,11 +360,22 @@ def train_model(
     batch_size: int,
     config: object,
     seed: int,
+    lr: Optional[float] = None,
+    warmup_steps: int = 0,
 ) -> TrainingSummary:
     if config.epochs < 1:
         raise ValueError("epochs must be positive")
+    
+    actual_lr = lr if lr is not None else config.lr
+    
+    # Simple linear warmup schedule for MLX
+    def lr_schedule(step: int) -> mx.array:
+        if step < warmup_steps:
+            return mx.array(actual_lr * (float(step) / float(max(1, warmup_steps))))
+        return mx.array(actual_lr)
+
     optimizer = optim.AdamW(
-        learning_rate=config.lr,
+        learning_rate=lr_schedule,
         weight_decay=config.weight_decay,
     )
 
@@ -342,6 +383,8 @@ def train_model(
         logits = model_(batch_tokens)
         return _cross_entropy(logits, batch_labels)
 
+    global_step = 0
+    train_loss = 0.0
     for _epoch in range(config.epochs):
         total_loss = 0.0
         total_items = 0
@@ -357,6 +400,7 @@ def train_model(
             mx.eval(model.parameters(), optimizer.state, loss)
             total_loss += float(loss.item()) * len(batch_tokens)
             total_items += len(batch_tokens)
+            global_step += 1
         if total_items == 0:
             raise ValueError("train_loader produced no items during training")
         train_loss = total_loss / total_items

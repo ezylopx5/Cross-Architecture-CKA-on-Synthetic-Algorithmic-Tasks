@@ -70,13 +70,23 @@ class TransformerClassifier(nn.Module):
         self.classifier = nn.Linear(config.d_model, num_classes)
 
     def forward(
-        self, tokens: torch.Tensor, return_activations: bool = False
+        self,
+        tokens: torch.Tensor,
+        return_activations: bool = False,
+        replacement_activations: dict[str, torch.Tensor] | None = None,
     ) -> ForwardResult | torch.Tensor:
         hidden = self.position(self.embedding(tokens))
         activations: dict[str, torch.Tensor] = {"embedding": hidden}
+        if replacement_activations and "embedding" in replacement_activations:
+            hidden = replacement_activations["embedding"]
+
         for idx, layer in enumerate(self.layers):
             hidden = layer(hidden)
-            activations[f"layer_{idx + 1}"] = hidden
+            layer_name = f"layer_{idx + 1}"
+            activations[layer_name] = hidden
+            if replacement_activations and layer_name in replacement_activations:
+                hidden = replacement_activations[layer_name]
+
         pooled = self.norm(hidden.mean(dim=1))
         logits = self.classifier(pooled)
         if return_activations:
@@ -108,13 +118,23 @@ class LSTMClassifier(nn.Module):
         self.classifier = nn.Linear(config.d_model, num_classes)
 
     def forward(
-        self, tokens: torch.Tensor, return_activations: bool = False
+        self,
+        tokens: torch.Tensor,
+        return_activations: bool = False,
+        replacement_activations: dict[str, torch.Tensor] | None = None,
     ) -> ForwardResult | torch.Tensor:
         hidden = self.embedding(tokens)
         activations: dict[str, torch.Tensor] = {"embedding": hidden}
+        if replacement_activations and "embedding" in replacement_activations:
+            hidden = replacement_activations["embedding"]
+
         for idx, layer in enumerate(self.layers):
             hidden, _ = layer(hidden)
-            activations[f"layer_{idx + 1}"] = hidden
+            layer_name = f"layer_{idx + 1}"
+            activations[layer_name] = hidden
+            if replacement_activations and layer_name in replacement_activations:
+                hidden = replacement_activations[layer_name]
+
         pooled = self.norm(hidden.mean(dim=1))
         logits = self.classifier(pooled)
         if return_activations:
@@ -146,13 +166,23 @@ class GRUClassifier(nn.Module):
         self.classifier = nn.Linear(config.d_model, num_classes)
 
     def forward(
-        self, tokens: torch.Tensor, return_activations: bool = False
+        self,
+        tokens: torch.Tensor,
+        return_activations: bool = False,
+        replacement_activations: dict[str, torch.Tensor] | None = None,
     ) -> ForwardResult | torch.Tensor:
         hidden = self.embedding(tokens)
         activations: dict[str, torch.Tensor] = {"embedding": hidden}
+        if replacement_activations and "embedding" in replacement_activations:
+            hidden = replacement_activations["embedding"]
+
         for idx, layer in enumerate(self.layers):
             hidden, _ = layer(hidden)
-            activations[f"layer_{idx + 1}"] = hidden
+            layer_name = f"layer_{idx + 1}"
+            activations[layer_name] = hidden
+            if replacement_activations and layer_name in replacement_activations:
+                hidden = replacement_activations[layer_name]
+
         pooled = self.norm(hidden.mean(dim=1))
         logits = self.classifier(pooled)
         if return_activations:

@@ -114,15 +114,23 @@ def save_heatmap(
 ) -> None:
     if heatmap.shape != (len(y_labels), len(x_labels)):
         raise ValueError("heatmap shape must match the provided axis labels")
+    
+    # Clean labels: layer_1 -> Layer 1, embedding -> Embedding
+    def clean_label(label: str) -> str:
+        return label.replace("_", " ").title()
+
+    y_labels = [clean_label(l) for l in y_labels]
+    x_labels = [clean_label(l) for l in x_labels]
+
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig, ax = plt.subplots(figsize=(6, 5))
     im = ax.imshow(heatmap, cmap="viridis", vmin=0.0, vmax=1.0)
     ax.set_xticks(np.arange(len(x_labels)))
     ax.set_yticks(np.arange(len(y_labels)))
-    ax.set_xticklabels(x_labels, rotation=45, ha="right")
-    ax.set_yticklabels(y_labels)
-    ax.set_title(title)
+    ax.set_xticklabels(x_labels, rotation=45, ha="right", fontsize=10)
+    ax.set_yticklabels(y_labels, fontsize=10)
+    ax.set_title(title, fontsize=12, pad=12)
     for row in range(heatmap.shape[0]):
         for col in range(heatmap.shape[1]):
             ax.text(
@@ -132,7 +140,7 @@ def save_heatmap(
                 ha="center",
                 va="center",
                 color="white" if heatmap[row, col] < 0.6 else "black",
-                fontsize=8,
+                fontsize=11,
             )
     fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04, label="CKA")
     fig.tight_layout()

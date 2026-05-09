@@ -71,17 +71,31 @@ def train_model(
     train_loader: DataLoader,
     val_loader: DataLoader,
     config: ExperimentConfig,
+    lr: Optional[float] = None,
+    warmup_steps: int = 0,
 ) -> TrainingSummary:
     if config.epochs < 1:
         raise ValueError("epochs must be positive")
     model.to(config.device)
     criterion = nn.CrossEntropyLoss()
+    
+    actual_lr = lr if lr is not None else config.lr
     optimizer = torch.optim.AdamW(
         model.parameters(),
-        lr=config.lr,
+        lr=actual_lr,
         weight_decay=config.weight_decay,
     )
+    
+    # Simple linear warmup
+    def lr_lambda(current_step: int):
+        if current_step < warmup_steps:
+            return float(current_step) / float(max(1, warmup_steps))
+        return 1.0
+        
+    scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
+    
     train_loss = 0.0
+    global_step = 0
     for _epoch in range(config.epochs):
         model.train()
         total_loss = 0.0
@@ -94,8 +108,10 @@ def train_model(
             loss = criterion(logits, labels)
             loss.backward()
             optimizer.step()
+            scheduler.step()
             total_loss += loss.item() * tokens.size(0)
             total_items += tokens.size(0)
+            global_step += 1
         if total_items == 0:
             raise ValueError("train_loader produced no items during training")
         train_loss = total_loss / total_items
