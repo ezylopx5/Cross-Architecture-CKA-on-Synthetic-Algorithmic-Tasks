@@ -4,3 +4,5 @@
 __pycache__/
 skills
 *.pyc
+con.txt
+goal.md

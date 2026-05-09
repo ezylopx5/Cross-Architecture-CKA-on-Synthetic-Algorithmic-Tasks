@@ -1,0 +1,16 @@
+task,architecture_pair,cross_cka_mean,within_baseline_mean,convergence_index
+modular_addition,transformer_vs_lstm,0.4241,0.5332,0.7954
+modular_addition,transformer_vs_gru,0.4688,0.5313,0.8824
+modular_addition,lstm_vs_gru,0.4435,0.3221,1.3769
+dyck_1,transformer_vs_lstm,0.4923,0.5999,0.8206
+dyck_1,transformer_vs_gru,0.5806,0.6543,0.8874
+dyck_1,lstm_vs_gru,0.5962,0.6399,0.9317
+dyck_2,transformer_vs_lstm,0.3623,0.6588,0.5499
+dyck_2,transformer_vs_gru,0.4541,0.668,0.6798
+dyck_2,lstm_vs_gru,0.3933,0.4365,0.901
+induction,transformer_vs_lstm,0.5535,0.7232,0.7653
+induction,transformer_vs_gru,0.5404,0.682,0.7924
+induction,lstm_vs_gru,0.775,0.7843,0.9881
+associative_recall,transformer_vs_lstm,0.4207,0.736,0.5716
+associative_recall,transformer_vs_gru,0.3793,0.6057,0.6262
+associative_recall,lstm_vs_gru,0.6752,0.7074,0.9545

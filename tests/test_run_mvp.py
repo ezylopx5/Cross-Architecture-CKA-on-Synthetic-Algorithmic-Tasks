@@ -37,6 +37,8 @@ def test_run_experiment_writes_summary_and_heatmap(tmp_path: Path) -> None:
     lstm_baseline_path = tmp_path / "modular_addition_lstm_within_seed_baseline_cka.png"
     gru_baseline_path = tmp_path / "modular_addition_gru_within_seed_baseline_cka.png"
     metrics_table_path = tmp_path / "metrics_table.csv"
+    probe_table_path = tmp_path / "probe_metrics.csv"
+    convergence_table_path = tmp_path / "convergence_table.csv"
 
     assert "summary_by_task" in summary
     assert summary_path.exists()
@@ -47,6 +49,8 @@ def test_run_experiment_writes_summary_and_heatmap(tmp_path: Path) -> None:
     assert lstm_baseline_path.exists()
     assert gru_baseline_path.exists()
     assert metrics_table_path.exists()
+    assert probe_table_path.exists()
+    assert convergence_table_path.exists()
     task_summary = summary["summary_by_task"]["modular_addition"]
     assert task_summary["cross_architecture"]["transformer_vs_lstm"]["heatmap_path"] == "modular_addition_transformer_vs_lstm_cross_seed_mean_cka.png"
     assert task_summary["cross_architecture"]["transformer_vs_gru"]["heatmap_path"] == "modular_addition_transformer_vs_gru_cross_seed_mean_cka.png"
@@ -54,6 +58,9 @@ def test_run_experiment_writes_summary_and_heatmap(tmp_path: Path) -> None:
     assert task_summary["within_architecture"]["transformer"]["heatmap_path"] == "modular_addition_transformer_within_seed_baseline_cka.png"
     assert task_summary["within_architecture"]["lstm"]["heatmap_path"] == "modular_addition_lstm_within_seed_baseline_cka.png"
     assert task_summary["within_architecture"]["gru"]["heatmap_path"] == "modular_addition_gru_within_seed_baseline_cka.png"
+    assert task_summary["probe_target_name"] == "answer_class"
+    assert task_summary["probing"]["transformer"]["embedding"]["val_accuracy"]["mean"] >= 0.0
+    assert task_summary["convergence_index"]["transformer_vs_lstm"]["convergence_index"] is not None
     assert json.loads(summary_path.read_text(encoding="ascii")) == summary
 
 

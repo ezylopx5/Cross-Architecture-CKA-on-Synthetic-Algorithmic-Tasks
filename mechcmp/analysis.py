@@ -56,6 +56,24 @@ def cka_heatmap_from_activations(
     return layers_a, layers_b, heatmap
 
 
+def cka_heatmap_from_activations(
+    activations_a: dict[str, np.ndarray],
+    activations_b: dict[str, np.ndarray],
+) -> tuple[list[str], list[str], np.ndarray]:
+    if not activations_a or not activations_b:
+        raise ValueError("Activation dictionaries must be non-empty")
+    layers_a = list(activations_a.keys())
+    layers_b = list(activations_b.keys())
+    heatmap = np.zeros((len(layers_a), len(layers_b)), dtype=np.float32)
+    for row, layer_a in enumerate(layers_a):
+        for col, layer_b in enumerate(layers_b):
+            heatmap[row, col] = linear_cka(
+                activations_a[layer_a],
+                activations_b[layer_b],
+            )
+    return layers_a, layers_b, heatmap
+
+
 def compute_cross_architecture_cka(
     model_a: torch.nn.Module,
     model_b: torch.nn.Module,

@@ -30,6 +30,12 @@ ARCH_LABELS = {
     "lstm": "LSTM",
     "gru": "GRU",
 }
+LAYER_ORDER = ["embedding", "layer_1", "layer_2"]
+LAYER_LABELS = {
+    "embedding": "Embedding",
+    "layer_1": "Layer 1",
+    "layer_2": "Layer 2",
+}
 PAIR_ORDER = [
     ("transformer", "lstm"),
     ("transformer", "gru"),
@@ -293,6 +299,93 @@ def build_accuracy_figure(
     return _save_figure(fig, output_dir / "figure_accuracy_summary")
 
 
+def build_probe_figure(
+    summary_by_task: dict[str, Any],
+    output_dir: Path,
+) -> dict[str, str]:
+    tasks = _ordered_tasks(summary_by_task)
+    columns = 3
+    rows = int(np.ceil(len(tasks) / columns))
+    fig, axes = plt.subplots(
+        rows,
+        columns,
+        figsize=(12, 3.5 * rows),
+        constrained_layout=True,
+    )
+    axes_array = np.atleast_2d(np.array(axes, dtype=object))
+    colors = {
+        "transformer": "#4C78A8",
+        "lstm": "#F58518",
+        "gru": "#54A24B",
+    }
+    for panel_index, ax in enumerate(axes_array.flat):
+        if panel_index >= len(tasks):
+            ax.axis("off")
+            continue
+        task_name = tasks[panel_index]
+        task_summary = summary_by_task[task_name]
+        x = np.arange(len(LAYER_ORDER))
+        for arch_name in ARCH_ORDER:
+            probe_summary = task_summary["probing"][arch_name]
+            means = [
+                probe_summary[layer_name]["val_accuracy"]["mean"]
+                for layer_name in LAYER_ORDER
+            ]
+            stds = [
+                probe_summary[layer_name]["val_accuracy"]["std"]
+                for layer_name in LAYER_ORDER
+            ]
+            ax.plot(
+                x,
+                means,
+                marker="o",
+                linewidth=2,
+                color=colors[arch_name],
+                label=ARCH_LABELS[arch_name],
+            )
+            ax.fill_between(
+                x,
+                np.asarray(means) - np.asarray(stds),
+                np.asarray(means) + np.asarray(stds),
+                color=colors[arch_name],
+                alpha=0.16,
+            )
+        chance = 1.0 / task_summary["probe_num_classes"]
+        ax.axhline(
+            chance,
+            linestyle="--",
+            linewidth=1.0,
+            color="#666666",
+            alpha=0.8,
+        )
+        ax.set_xticks(x)
+        ax.set_xticklabels([LAYER_LABELS[layer_name] for layer_name in LAYER_ORDER])
+        ax.set_ylim(0.0, 1.05)
+        ax.set_title(TASK_LABELS.get(task_name, task_name))
+        ax.set_ylabel("Probe Accuracy")
+        ax.grid(axis="y", linestyle="--", linewidth=0.7, alpha=0.35)
+        ax.text(
+            0.98,
+            0.03,
+            f"Target: {task_summary['probe_target_name']}\nChance: {chance:.2f}",
+            transform=ax.transAxes,
+            ha="right",
+            va="bottom",
+            fontsize=8,
+            bbox={
+                "facecolor": "white",
+                "alpha": 0.85,
+                "edgecolor": "#c7c7c7",
+                "boxstyle": "round,pad=0.25",
+            },
+        )
+        _add_panel_badge(ax, panel_index)
+    handles, labels = axes_array.flat[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="upper center", ncol=3, frameon=False)
+    fig.suptitle("Layer-wise Linear Probe Accuracy Across Tasks and Architectures", y=1.02)
+    return _save_figure(fig, output_dir / "figure_probe_summary")
+
+
 def generate_paper_figures(results_dir: Path, output_dir: Path) -> dict[str, Any]:
     _configure_plot_style()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -308,6 +401,9 @@ def generate_paper_figures(results_dir: Path, output_dir: Path) -> dict[str, Any
         ),
         "accuracy_summary": build_accuracy_figure(
             summary_by_task, metrics_rows, output_dir
+        ),
+        "probe_summary": build_probe_figure(
+            summary_by_task, output_dir
         ),
     }
     manifest_path = output_dir / "figure_manifest.json"

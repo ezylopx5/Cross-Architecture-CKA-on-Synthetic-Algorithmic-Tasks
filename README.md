@@ -36,7 +36,7 @@ results/
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-PYTHONPATH=. python scripts/run_mvp.py
+PYTHONPATH=. python scripts/run_mvp.py --backend auto
 ```
 
 Outputs are written into `results/`:
@@ -50,6 +50,14 @@ To generate publication-ready composite figures from those outputs:
 
 ```bash
 PYTHONPATH=. python scripts/make_paper_figures.py --results-dir results --output-dir paper_figures
+```
+
+For Apple Silicon Macs, you can force the MLX backend and write the paper-ready
+artifacts into the workshop directories:
+
+```bash
+PYTHONPATH=. python scripts/run_mvp.py --backend mlx --output-dir mechinter_results
+PYTHONPATH=. python scripts/make_paper_figures.py --results-dir mechinter_results --output-dir mechinter_paper_figures
 ```
 
 This writes:

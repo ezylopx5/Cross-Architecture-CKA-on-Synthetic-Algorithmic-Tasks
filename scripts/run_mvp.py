@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import csv
 import json
 from itertools import combinations
@@ -7,13 +8,23 @@ from pathlib import Path
 from statistics import mean, pstdev
 from typing import Any
 
+import numpy as np
 import torch
 
 from mechcmp.analysis import average_heatmaps, cka_heatmap_from_activations, save_heatmap
 from mechcmp.config import ExperimentConfig, ModelConfig, TaskConfig
 from mechcmp.models import build_model
+from mechcmp.probing import run_layerwise_probing
 from mechcmp.tasks import build_task_datasets
 from mechcmp.training import collect_layer_activations, make_loader, set_seed, train_model
+
+try:
+    from mechcmp import mlx_backend
+
+    MLX_AVAILABLE = True
+except Exception:
+    mlx_backend = None
+    MLX_AVAILABLE = False
 
 
 def _make_seeded_generator(seed: int) -> torch.Generator:
@@ -71,14 +82,91 @@ def default_tasks() -> list[TaskConfig]:
 def _summarize(values: list[float]) -> dict[str, float]:
     if not values:
         raise ValueError("values must contain at least one element")
+    ci_low, ci_high = _bootstrap_mean_ci(values, seed=0)
     return {
         "mean": round(mean(values), 4),
         "std": round(pstdev(values), 4),
+        "ci_low": round(ci_low, 4),
+        "ci_high": round(ci_high, 4),
     }
 
 
 def default_architectures() -> list[str]:
     return ["transformer", "lstm", "gru"]
+
+
+def default_model_seeds() -> list[int]:
+    return [42, 43, 44, 45, 46, 47, 48, 49]
+
+
+def _resolve_backend(backend: str) -> str:
+    if backend == "auto":
+        return "mlx" if MLX_AVAILABLE else "torch"
+    if backend == "mlx" and not MLX_AVAILABLE:
+        raise ValueError("backend=mlx requested but mlx is not available")
+    if backend not in {"torch", "mlx"}:
+        raise ValueError(f"Unsupported backend: {backend}")
+    return backend
+
+
+def _bootstrap_mean_ci(
+    values: list[float],
+    seed: int,
+    num_bootstrap_samples: int = 1000,
+) -> tuple[float, float]:
+    if not values:
+        raise ValueError("values must contain at least one element")
+    array = np.asarray(values, dtype=np.float64)
+    if array.size == 1:
+        only = float(array[0])
+        return only, only
+    rng = np.random.default_rng(seed)
+    bootstrap_indices = rng.integers(
+        0, array.size, size=(num_bootstrap_samples, array.size)
+    )
+    bootstrap_means = array[bootstrap_indices].mean(axis=1)
+    ci_low, ci_high = np.quantile(bootstrap_means, [0.025, 0.975])
+    return float(ci_low), float(ci_high)
+
+
+def _round_matrix(matrix: np.ndarray, digits: int = 4) -> list[list[float]]:
+    return np.round(matrix.astype(np.float64), digits).tolist()
+
+
+def _summarize_heatmaps(
+    heatmaps: list[np.ndarray],
+    seed: int,
+    num_bootstrap_samples: int = 500,
+) -> dict[str, object]:
+    if not heatmaps:
+        raise ValueError("heatmaps must contain at least one matrix")
+    stack = np.stack(heatmaps, axis=0).astype(np.float64)
+    mean_heatmap = stack.mean(axis=0)
+    std_heatmap = stack.std(axis=0)
+    if stack.shape[0] == 1:
+        ci_low_heatmap = mean_heatmap.copy()
+        ci_high_heatmap = mean_heatmap.copy()
+    else:
+        rng = np.random.default_rng(seed)
+        bootstrap_indices = rng.integers(
+            0, stack.shape[0], size=(num_bootstrap_samples, stack.shape[0])
+        )
+        bootstrap_means = stack[bootstrap_indices].mean(axis=1)
+        ci_low_heatmap, ci_high_heatmap = np.quantile(
+            bootstrap_means, [0.025, 0.975], axis=0
+        )
+    scalar_scores = [float(np.mean(heatmap)) for heatmap in heatmaps]
+    scalar_ci_low, scalar_ci_high = _bootstrap_mean_ci(scalar_scores, seed=seed)
+    return {
+        "mean": _round_matrix(mean_heatmap),
+        "std": _round_matrix(std_heatmap),
+        "ci_low": _round_matrix(ci_low_heatmap),
+        "ci_high": _round_matrix(ci_high_heatmap),
+        "scalar_mean": round(float(mean(scalar_scores)), 4),
+        "scalar_std": round(float(pstdev(scalar_scores)), 4),
+        "scalar_ci_low": round(scalar_ci_low, 4),
+        "scalar_ci_high": round(scalar_ci_high, 4),
+    }
 
 
 def _train_model_for_seed(
@@ -108,6 +196,40 @@ def _train_model_for_seed(
     return model, summary
 
 
+def _train_model_for_seed_mlx(
+    arch: str,
+    task: TaskConfig,
+    model_config: ModelConfig,
+    exp_config: ExperimentConfig,
+    train_tokens: np.ndarray,
+    train_labels: np.ndarray,
+    val_tokens: np.ndarray,
+    val_labels: np.ndarray,
+    model_seed: int,
+):
+    if mlx_backend is None:
+        raise RuntimeError("MLX backend requested but mlx_backend is unavailable")
+    mlx_backend.set_seed(model_seed)
+    model = mlx_backend.build_model(
+        arch,
+        vocab_size=task.vocab_size,
+        num_classes=task.num_classes,
+        config=model_config,
+        max_seq_len=task.seq_len,
+    )
+    summary = mlx_backend.train_model(
+        model,
+        train_tokens=train_tokens,
+        train_labels=train_labels,
+        val_tokens=val_tokens,
+        val_labels=val_labels,
+        batch_size=exp_config.batch_size,
+        config=exp_config,
+        seed=model_seed,
+    )
+    return model, summary
+
+
 def _pair_name(arch_a: str, arch_b: str) -> str:
     return f"{arch_a}_vs_{arch_b}"
 
@@ -132,6 +254,47 @@ def _save_metrics_table(
     return output_path.name
 
 
+def _save_probe_table(
+    probe_rows: list[dict[str, float | int | str]],
+    output_path: Path,
+) -> str:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fieldnames = [
+        "task",
+        "seed",
+        "architecture",
+        "layer",
+        "target_name",
+        "num_classes",
+        "train_accuracy",
+        "val_accuracy",
+    ]
+    with output_path.open("w", encoding="ascii", newline="") as csv_file:
+        writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(probe_rows)
+    return output_path.name
+
+
+def _save_convergence_table(
+    convergence_rows: list[dict[str, float | str]],
+    output_path: Path,
+) -> str:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fieldnames = [
+        "task",
+        "architecture_pair",
+        "cross_cka_mean",
+        "within_baseline_mean",
+        "convergence_index",
+    ]
+    with output_path.open("w", encoding="ascii", newline="") as csv_file:
+        writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(convergence_rows)
+    return output_path.name
+
+
 def _save_mean_heatmap(
     heatmaps: list[torch.Tensor | object],
     y_labels: list[str],
@@ -147,44 +310,127 @@ def _save_mean_heatmap(
 def run_experiment(
     exp_config: ExperimentConfig,
     model_config: ModelConfig,
+    backend: str = "torch",
 ) -> dict[str, Any]:
     if not exp_config.seeds:
         raise ValueError("ExperimentConfig.seeds must contain at least one seed")
+    backend = _resolve_backend(backend)
     set_seed(exp_config.seed)
+    if backend == "mlx" and mlx_backend is not None:
+        mlx_backend.set_seed(exp_config.seed)
     output_dir = Path(exp_config.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     architectures = default_architectures()
 
     metrics_rows: list[dict[str, float | int | str]] = []
+    probe_rows: list[dict[str, float | int | str]] = []
+    convergence_rows: list[dict[str, float | str]] = []
     summary: dict[str, dict[str, object]] = {}
     for task in exp_config.tasks:
         train_ds, val_ds = build_task_datasets(task, exp_config.seed)
-        val_loader = make_loader(val_ds, exp_config.batch_size, shuffle=False)
+        if backend == "mlx":
+            train_tokens, train_labels = mlx_backend.dataset_to_arrays(train_ds)
+            val_tokens, val_labels = mlx_backend.dataset_to_arrays(val_ds)
+        else:
+            train_probe_loader = make_loader(
+                train_ds, exp_config.batch_size, shuffle=False
+            )
+            val_loader = make_loader(val_ds, exp_config.batch_size, shuffle=False)
         per_seed: dict[str, dict[str, float]] = {}
         activations_by_arch: dict[str, list[dict[str, object]]] = {
             arch: [] for arch in architectures
         }
         accuracies_by_arch: dict[str, list[float]] = {arch: [] for arch in architectures}
+        probe_results_by_arch: dict[str, dict[str, dict[str, list[float]]]] = {
+            arch: {} for arch in architectures
+        }
+        probe_target_name = ""
+        probe_num_classes = 0
         cross_heatmaps_by_pair: dict[str, list[object]] = {}
         cross_labels_by_pair: dict[str, tuple[list[str], list[str]]] = {}
+        within_scores_by_arch: dict[str, list[float]] = {arch: [] for arch in architectures}
 
         for model_seed in exp_config.seeds:
             seed_activations: dict[str, dict[str, object]] = {}
             seed_metrics: dict[str, float] = {}
             for arch in architectures:
-                model, model_summary = _train_model_for_seed(
-                    arch,
-                    task,
-                    model_config,
-                    exp_config,
-                    train_ds,
-                    val_loader,
-                    model_seed,
+                if backend == "mlx":
+                    model, model_summary = _train_model_for_seed_mlx(
+                        arch,
+                        task,
+                        model_config,
+                        exp_config,
+                        train_tokens,
+                        train_labels,
+                        val_tokens,
+                        val_labels,
+                        model_seed,
+                    )
+                    train_activations = mlx_backend.collect_layer_activations(
+                        model,
+                        train_tokens,
+                        batch_size=exp_config.batch_size,
+                        seed=model_seed,
+                    )
+                    val_activations = mlx_backend.collect_layer_activations(
+                        model,
+                        val_tokens,
+                        batch_size=exp_config.batch_size,
+                        seed=model_seed,
+                    )
+                else:
+                    model, model_summary = _train_model_for_seed(
+                        arch,
+                        task,
+                        model_config,
+                        exp_config,
+                        train_ds,
+                        val_loader,
+                        model_seed,
+                    )
+                    train_activations = collect_layer_activations(
+                        model, train_probe_loader, exp_config.device
+                    )
+                    val_activations = collect_layer_activations(
+                        model, val_loader, exp_config.device
+                    )
+                target_name, target_num_classes, probe_metrics = run_layerwise_probing(
+                    task_name=task.name,
+                    train_dataset=train_ds,
+                    val_dataset=val_ds,
+                    train_activations=train_activations,
+                    val_activations=val_activations,
+                    seed=model_seed,
                 )
-                activations = collect_layer_activations(model, val_loader, exp_config.device)
-                activations_by_arch[arch].append(activations)
-                seed_activations[arch] = activations
-                model.to("cpu")
+                probe_target_name = target_name
+                probe_num_classes = target_num_classes
+                for layer_name, layer_metrics in probe_metrics.items():
+                    probe_results_by_arch[arch].setdefault(
+                        layer_name,
+                        {"train_accuracy": [], "val_accuracy": []},
+                    )
+                    probe_results_by_arch[arch][layer_name]["train_accuracy"].append(
+                        layer_metrics.train_accuracy
+                    )
+                    probe_results_by_arch[arch][layer_name]["val_accuracy"].append(
+                        layer_metrics.val_accuracy
+                    )
+                    probe_rows.append(
+                        {
+                            "task": task.name,
+                            "seed": model_seed,
+                            "architecture": arch,
+                            "layer": layer_name,
+                            "target_name": target_name,
+                            "num_classes": target_num_classes,
+                            "train_accuracy": round(layer_metrics.train_accuracy, 6),
+                            "val_accuracy": round(layer_metrics.val_accuracy, 6),
+                        }
+                    )
+                activations_by_arch[arch].append(val_activations)
+                seed_activations[arch] = val_activations
+                if backend == "torch":
+                    model.to("cpu")
                 del model
                 accuracies_by_arch[arch].append(model_summary.val_accuracy)
                 seed_metrics[f"{arch}_val_accuracy"] = round(model_summary.val_accuracy, 4)
@@ -213,6 +459,10 @@ def run_experiment(
         for arch_a, arch_b in combinations(architectures, 2):
             pair_name = _pair_name(arch_a, arch_b)
             y_labels, x_labels = cross_labels_by_pair[pair_name]
+            heatmap_stats = _summarize_heatmaps(
+                cross_heatmaps_by_pair[pair_name],
+                seed=exp_config.seed + len(task.name) + len(pair_name),
+            )
             cross_heatmap_filename = _save_mean_heatmap(
                 cross_heatmaps_by_pair[pair_name],
                 y_labels,
@@ -224,6 +474,14 @@ def run_experiment(
                 f"{arch_a}_val_accuracy": _summarize(accuracies_by_arch[arch_a]),
                 f"{arch_b}_val_accuracy": _summarize(accuracies_by_arch[arch_b]),
                 "heatmap_path": cross_heatmap_filename,
+                "heatmap_mean": heatmap_stats["mean"],
+                "heatmap_std": heatmap_stats["std"],
+                "heatmap_ci_low": heatmap_stats["ci_low"],
+                "heatmap_ci_high": heatmap_stats["ci_high"],
+                "mean_cka": heatmap_stats["scalar_mean"],
+                "mean_cka_std": heatmap_stats["scalar_std"],
+                "mean_cka_ci_low": heatmap_stats["scalar_ci_low"],
+                "mean_cka_ci_high": heatmap_stats["scalar_ci_high"],
             }
 
         within_architecture: dict[str, dict[str, object]] = {}
@@ -236,7 +494,12 @@ def run_experiment(
                     acts_a, acts_b
                 )
                 pairwise_heatmaps.append(heatmap)
+                within_scores_by_arch[arch_name].append(float(np.mean(heatmap)))
             if pairwise_heatmaps and y_labels is not None and x_labels is not None:
+                heatmap_stats = _summarize_heatmaps(
+                    pairwise_heatmaps,
+                    seed=exp_config.seed + len(task.name) + len(arch_name),
+                )
                 heatmap_filename = _save_mean_heatmap(
                     pairwise_heatmaps,
                     y_labels,
@@ -244,13 +507,79 @@ def run_experiment(
                     output_dir / f"{task.name}_{arch_name}_within_seed_baseline_cka.png",
                     f"{task.name}: {arch_name} within-architecture baseline",
                 )
+                mean_cka = heatmap_stats["scalar_mean"]
+                mean_cka_std = heatmap_stats["scalar_std"]
+                mean_cka_ci_low = heatmap_stats["scalar_ci_low"]
+                mean_cka_ci_high = heatmap_stats["scalar_ci_high"]
+                heatmap_mean = heatmap_stats["mean"]
+                heatmap_std = heatmap_stats["std"]
+                heatmap_ci_low = heatmap_stats["ci_low"]
+                heatmap_ci_high = heatmap_stats["ci_high"]
             else:
                 heatmap_filename = None
+                mean_cka = None
+                mean_cka_std = None
+                mean_cka_ci_low = None
+                mean_cka_ci_high = None
+                heatmap_mean = None
+                heatmap_std = None
+                heatmap_ci_low = None
+                heatmap_ci_high = None
             within_architecture[arch_name] = {
                 "num_seed_pairs": len(pairwise_heatmaps),
                 "heatmap_path": heatmap_filename,
                 "val_accuracy": _summarize(accuracies_by_arch[arch_name]),
+                "mean_cka": mean_cka,
+                "mean_cka_std": mean_cka_std,
+                "mean_cka_ci_low": mean_cka_ci_low,
+                "mean_cka_ci_high": mean_cka_ci_high,
+                "heatmap_mean": heatmap_mean,
+                "heatmap_std": heatmap_std,
+                "heatmap_ci_low": heatmap_ci_low,
+                "heatmap_ci_high": heatmap_ci_high,
             }
+
+        convergence_index: dict[str, dict[str, float | None]] = {}
+        for arch_a, arch_b in combinations(architectures, 2):
+            pair_name = _pair_name(arch_a, arch_b)
+            cross_mean_cka = cross_architecture[pair_name]["mean_cka"]
+            within_a = within_architecture[arch_a]["mean_cka"]
+            within_b = within_architecture[arch_b]["mean_cka"]
+            if within_a is None or within_b is None:
+                within_baseline_mean = None
+                pair_convergence_index = None
+            else:
+                within_baseline_mean = round((within_a + within_b) / 2.0, 4)
+                pair_convergence_index = (
+                    round(cross_mean_cka / within_baseline_mean, 4)
+                    if within_baseline_mean > 0
+                    else 0.0
+                )
+                convergence_rows.append(
+                    {
+                        "task": task.name,
+                        "architecture_pair": pair_name,
+                        "cross_cka_mean": round(cross_mean_cka, 4),
+                        "within_baseline_mean": within_baseline_mean,
+                        "convergence_index": pair_convergence_index,
+                    }
+                )
+            convergence_index[pair_name] = {
+                "cross_cka_mean": round(cross_mean_cka, 4),
+                "within_baseline_mean": within_baseline_mean,
+                "convergence_index": pair_convergence_index,
+            }
+
+        probing: dict[str, dict[str, object]] = {}
+        for arch_name in architectures:
+            probing[arch_name] = {}
+            for layer_name, layer_metrics in probe_results_by_arch[arch_name].items():
+                probing[arch_name][layer_name] = {
+                    "target_name": probe_target_name,
+                    "num_classes": probe_num_classes,
+                    "train_accuracy": _summarize(layer_metrics["train_accuracy"]),
+                    "val_accuracy": _summarize(layer_metrics["val_accuracy"]),
+                }
 
         summary[task.name] = {
             "dataset_seed": exp_config.seed,
@@ -259,16 +588,30 @@ def run_experiment(
             "architectures": architectures,
             "cross_architecture": cross_architecture,
             "within_architecture": within_architecture,
+            "probe_target_name": probe_target_name,
+            "probe_num_classes": probe_num_classes,
+            "probing": probing,
+            "convergence_index": convergence_index,
         }
 
     metrics_table_path = _save_metrics_table(
         metrics_rows,
         output_dir / "metrics_table.csv",
     )
+    probe_table_path = _save_probe_table(
+        probe_rows,
+        output_dir / "probe_metrics.csv",
+    )
+    convergence_table_path = _save_convergence_table(
+        convergence_rows,
+        output_dir / "convergence_table.csv",
+    )
     with (output_dir / "summary.json").open("w", encoding="ascii") as f:
         json.dump(
             {
                 "metrics_table_path": metrics_table_path,
+                "probe_table_path": probe_table_path,
+                "convergence_table_path": convergence_table_path,
                 "summary_by_task": summary,
             },
             f,
@@ -276,24 +619,84 @@ def run_experiment(
         )
     return {
         "metrics_table_path": metrics_table_path,
+        "probe_table_path": probe_table_path,
+        "convergence_table_path": convergence_table_path,
         "summary_by_task": summary,
     }
 
 
 def main() -> None:
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    parser = argparse.ArgumentParser(
+        description="Run the MechInterpret cross-architecture comparison benchmark."
+    )
+    parser.add_argument("--seed", type=int, default=42, help="Dataset seed.")
+    parser.add_argument(
+        "--seeds",
+        type=int,
+        nargs="+",
+        default=default_model_seeds(),
+        help="Model seeds to train and aggregate over.",
+    )
+    parser.add_argument(
+        "--device",
+        type=str,
+        default=None,
+        help="Computation device. Defaults to cuda when available, else cpu.",
+    )
+    parser.add_argument("--batch-size", type=int, default=64, help="Batch size.")
+    parser.add_argument("--lr", type=float, default=1e-3, help="Learning rate.")
+    parser.add_argument("--epochs", type=int, default=10, help="Training epochs.")
+    parser.add_argument(
+        "--weight-decay", type=float, default=1e-4, help="AdamW weight decay."
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default="results",
+        help="Directory where experiment outputs will be written.",
+    )
+    parser.add_argument(
+        "--backend",
+        type=str,
+        default="auto",
+        help="Backend to use: torch, mlx, or auto.",
+    )
+    parser.add_argument("--d-model", type=int, default=128, help="Hidden size.")
+    parser.add_argument(
+        "--num-layers", type=int, default=2, help="Number of model layers."
+    )
+    parser.add_argument(
+        "--num-heads",
+        type=int,
+        default=4,
+        help="Number of attention heads for the Transformer.",
+    )
+    args = parser.parse_args()
+    if args.device is not None:
+        device = args.device
+    elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        device = "mps"
+    else:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
     exp_config = ExperimentConfig(
-        seed=42,
-        seeds=[42, 43],
+        seed=args.seed,
+        seeds=args.seeds,
         device=device,
-        batch_size=64,
-        lr=1e-3,
-        epochs=10,
-        output_dir="results",
+        batch_size=args.batch_size,
+        lr=args.lr,
+        epochs=args.epochs,
+        weight_decay=args.weight_decay,
+        output_dir=args.output_dir,
         tasks=default_tasks(),
     )
-    model_config = ModelConfig(name="matched_small", d_model=128, num_layers=2)
-    run_experiment(exp_config, model_config)
+    model_config = ModelConfig(
+        name="matched_small",
+        d_model=args.d_model,
+        num_layers=args.num_layers,
+        num_heads=args.num_heads,
+    )
+    summary = run_experiment(exp_config, model_config, backend=args.backend)
+    print(json.dumps(summary, indent=2))
 
 
 if __name__ == "__main__":

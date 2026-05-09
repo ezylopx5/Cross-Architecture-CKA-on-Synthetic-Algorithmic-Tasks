@@ -2,3 +2,4 @@ torch>=2.2
 numpy>=1.26
 matplotlib>=3.8
 pytest>=8.0
+mlx>=0.10; platform_system=="Darwin" and platform_machine=="arm64"
