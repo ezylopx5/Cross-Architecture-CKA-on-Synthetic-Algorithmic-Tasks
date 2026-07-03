@@ -86,16 +86,14 @@ def _ordered_tasks(summary_by_task: dict[str, Any]) -> list[str]:
     return configured + extras
 
 
+def _short_layer_labels() -> list[str]:
+    return ["Emb.", "L1", "L2"]
+
+
 def _panel_label(index: int) -> str:
     if index < len(PANEL_LABELS):
         return PANEL_LABELS[index]
     return f"P{index + 1}"
-
-
-def _load_image(image_path: Path) -> np.ndarray:
-    if not image_path.exists():
-        raise FileNotFoundError(f"Missing heatmap image: {image_path}")
-    return plt.imread(image_path)
 
 
 def _add_panel_badge(ax: plt.Axes, index: int) -> None:
@@ -125,6 +123,41 @@ def _pair_key(arch_a: str, arch_b: str) -> str:
     return f"{arch_a}_vs_{arch_b}"
 
 
+def _draw_heatmap(
+    ax: plt.Axes,
+    matrix: list[list[float]] | np.ndarray,
+    show_x_labels: bool,
+    show_y_labels: bool,
+    y_axis_label: str | None = None,
+) -> Any:
+    array = np.asarray(matrix, dtype=float)
+    im = ax.imshow(array, cmap="viridis", vmin=0.0, vmax=1.0, aspect="equal")
+    ticks = np.arange(len(_short_layer_labels()))
+    ax.set_xticks(ticks)
+    ax.set_yticks(ticks)
+    ax.set_xticklabels(_short_layer_labels() if show_x_labels else [])
+    ax.set_yticklabels(_short_layer_labels() if show_y_labels else [])
+    if show_x_labels:
+        plt.setp(ax.get_xticklabels(), rotation=35, ha="right")
+    ax.tick_params(length=0, pad=2)
+    if y_axis_label:
+        ax.set_ylabel(y_axis_label, rotation=90, labelpad=18)
+    for row in range(array.shape[0]):
+        for col in range(array.shape[1]):
+            value = array[row, col]
+            ax.text(
+                col,
+                row,
+                f"{value:.2f}",
+                ha="center",
+                va="center",
+                color="white" if value < 0.58 else "black",
+                fontsize=8,
+                fontweight="medium",
+            )
+    return im
+
+
 def build_cross_architecture_figure(
     summary_by_task: dict[str, Any],
     results_dir: Path,
@@ -134,50 +167,32 @@ def build_cross_architecture_figure(
     fig, axes = plt.subplots(
         len(tasks),
         len(PAIR_ORDER),
-        figsize=(12, 2.35 * len(tasks)),
+        figsize=(10.5, 3.1 * len(tasks)),
         constrained_layout=True,
     )
     axes_array = np.atleast_2d(np.array(axes, dtype=object))
     panel_index = 0
+    shared_im = None
     for row, task_name in enumerate(tasks):
         task_summary = summary_by_task[task_name]
         for col, (arch_a, arch_b) in enumerate(PAIR_ORDER):
             ax = axes_array[row, col]
             pair_name = _pair_key(arch_a, arch_b)
             pair_summary = task_summary["cross_architecture"][pair_name]
-            image = _load_image(results_dir / pair_summary["heatmap_path"])
-            ax.imshow(image)
-            ax.set_xticks([])
-            ax.set_yticks([])
-            title = f"{TASK_LABELS.get(task_name, task_name)}: {ARCH_LABELS[arch_a]} vs {ARCH_LABELS[arch_b]}"
+            shared_im = _draw_heatmap(
+                ax,
+                pair_summary["heatmap_mean"],
+                show_x_labels=True,
+                show_y_labels=(col == 0),
+                y_axis_label=TASK_LABELS.get(task_name, task_name) if col == 0 else None,
+            )
             if row == 0:
-                ax.set_title(title, pad=12, fontsize=10)
-            accuracy_text = (
-                f"{ARCH_LABELS[arch_a]} {pair_summary[f'{arch_a}_val_accuracy']['mean']:.3f} \u00b1 "
-                f"{pair_summary[f'{arch_a}_val_accuracy']['std']:.3f}\n"
-                f"{ARCH_LABELS[arch_b]} {pair_summary[f'{arch_b}_val_accuracy']['mean']:.3f} \u00b1 "
-                f"{pair_summary[f'{arch_b}_val_accuracy']['std']:.3f}"
-            )
-            ax.text(
-                0.99,
-                0.02,
-                accuracy_text,
-                transform=ax.transAxes,
-                va="bottom",
-                ha="right",
-                fontsize=8,
-                bbox={
-                    "facecolor": "white",
-                    "alpha": 0.9,
-                    "edgecolor": "#c7c7c7",
-                    "boxstyle": "round,pad=0.25",
-                },
-            )
-            if col == 0:
-                ax.set_ylabel(TASK_LABELS.get(task_name, task_name), rotation=90, labelpad=20)
+                ax.set_title(f"{ARCH_LABELS[arch_a]} vs {ARCH_LABELS[arch_b]}", pad=10, fontsize=11)
             _add_panel_badge(ax, panel_index)
             panel_index += 1
-    fig.suptitle("Cross-Architecture CKA Heatmaps Across Synthetic Tasks", y=1.02)
+    if shared_im is not None:
+        fig.colorbar(shared_im, ax=axes_array.ravel().tolist(), shrink=0.82, pad=0.02, label="CKA")
+    fig.suptitle("Cross-Architecture CKA Heatmaps", y=1.01)
     return _save_figure(fig, output_dir / "figure_cross_architecture_cka")
 
 
@@ -190,22 +205,30 @@ def build_within_architecture_figure(
     fig, axes = plt.subplots(
         len(tasks),
         len(ARCH_ORDER),
-        figsize=(12, 2.35 * len(tasks)),
+        figsize=(10.5, 3.1 * len(tasks)),
         constrained_layout=True,
     )
     axes_array = np.atleast_2d(np.array(axes, dtype=object))
     panel_index = 0
+    shared_im = None
     for row, task_name in enumerate(tasks):
         task_summary = summary_by_task[task_name]
         for col, arch_name in enumerate(ARCH_ORDER):
             ax = axes_array[row, col]
             within_summary = task_summary["within_architecture"][arch_name]
-            heatmap_path = within_summary["heatmap_path"]
-            if heatmap_path:
-                image = _load_image(results_dir / heatmap_path)
-                ax.imshow(image)
+            heatmap = within_summary.get("heatmap_mean")
+            if heatmap:
+                shared_im = _draw_heatmap(
+                    ax,
+                    heatmap,
+                    show_x_labels=True,
+                    show_y_labels=(col == 0),
+                    y_axis_label=TASK_LABELS.get(task_name, task_name) if col == 0 else None,
+                )
             else:
-                ax.imshow(np.ones((32, 32, 3), dtype=np.float32))
+                ax.imshow(np.ones((32, 32), dtype=np.float32), cmap="gray", vmin=0.0, vmax=1.0)
+                ax.set_xticks([])
+                ax.set_yticks([])
                 ax.text(
                     0.5,
                     0.5,
@@ -216,32 +239,13 @@ def build_within_architecture_figure(
                     fontsize=11,
                     color="#555555",
                 )
-            ax.set_xticks([])
-            ax.set_yticks([])
             if row == 0:
                 ax.set_title(ARCH_LABELS[arch_name], pad=8)
-            ax.text(
-                0.99,
-                0.02,
-                f"Acc {within_summary['val_accuracy']['mean']:.3f} \u00b1 "
-                f"{within_summary['val_accuracy']['std']:.3f}\n"
-                f"Pairs {within_summary['num_seed_pairs']}",
-                transform=ax.transAxes,
-                va="bottom",
-                ha="right",
-                fontsize=8,
-                bbox={
-                    "facecolor": "white",
-                    "alpha": 0.9,
-                    "edgecolor": "#c7c7c7",
-                    "boxstyle": "round,pad=0.25",
-                },
-            )
-            if col == 0:
-                ax.set_ylabel(TASK_LABELS.get(task_name, task_name), rotation=90, labelpad=20)
             _add_panel_badge(ax, panel_index)
             panel_index += 1
-    fig.suptitle("Within-Architecture Seed Baseline CKA Heatmaps", y=1.02)
+    if shared_im is not None:
+        fig.colorbar(shared_im, ax=axes_array.ravel().tolist(), shrink=0.82, pad=0.02, label="CKA")
+    fig.suptitle("Within-Architecture Seed Baseline CKA", y=1.01)
     return _save_figure(fig, output_dir / "figure_within_architecture_baselines")
 
 

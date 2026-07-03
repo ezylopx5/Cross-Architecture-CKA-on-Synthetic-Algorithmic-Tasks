@@ -1,8 +1,0 @@
-.DS_Store
-.venv/
-.pytest_cache/
-__pycache__/
-skills
-*.pyc
-con.txt
-goal.md
