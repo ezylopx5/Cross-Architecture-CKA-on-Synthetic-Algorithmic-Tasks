@@ -309,7 +309,20 @@ results/
 ```
 
 ---
+## Citation
+If you use this code in your research, please cite:
+```bibtex
+@inproceedings{
+rathwa2026crossarchitecture,
+title={Cross-Architecture Centered Kernel Alignment Reveals Where Sequence Models Converge and Diverge on Synthetic Algorithmic Tasks},
+author={Harsh Rathwa},
+booktitle={Mechanistic Interpretability Workshop at ICML 2026},
+year={2026},
+url={https://openreview.net/forum?id=shnSUuENYU}
+}
+```
 
+---
 
 
 - License
